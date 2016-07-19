@@ -684,6 +684,31 @@ func checkNodesInMetricsApi(fm kubeFramework, svc *kube_api.Service, nodes []str
 	return nil
 }
 
+func getClusterMetrics(fm kubeFramework, svc *kube_api.Service) (*metrics_api.ClusterMetrics, error) {
+	url := "apis/metrics/v1alpha1/cluster/"
+	body, err := getDataFromProxy(fm, svc, url)
+	if err != nil {
+		return nil, err
+	}
+	var data metrics_api.ClusterMetrics
+	if err := json.Unmarshal(body, &data); err != nil {
+		glog.V(2).Infof("response body: %v", string(body))
+		return nil, err
+	}
+	return &data, nil
+}
+
+func checkClusterMetricsApi(fm kubeFramework, svc *kube_api.Service) error {
+	metrics, err := getClusterMetrics(fm, svc)
+	if err != nil {
+		return err
+	}
+	if err := checkUsage(metrics.Usage); err != nil {
+		return err
+	}
+	return nil
+}
+
 func runMetricsApiTest(fm kubeFramework, svc *kube_api.Service) error {
 	podList, err := fm.GetRunningPods()
 	if err != nil {
@@ -703,7 +728,11 @@ func runMetricsApiTest(fm kubeFramework, svc *kube_api.Service) error {
 	if len(nodeList) == 0 {
 		return fmt.Errorf(("empty node list"))
 	}
-	return checkNodesInMetricsApi(fm, svc, nodeList)
+	if err := checkNodesInMetricsApi(fm, svc, nodeList); err != nil {
+		return err
+	}
+
+	return checkClusterMetricsApi(fm, svc)
 }
 
 func apiTest(kubeVersion string, zone string) error {

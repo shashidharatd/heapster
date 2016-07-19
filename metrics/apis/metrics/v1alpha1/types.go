@@ -19,6 +19,20 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 )
 
+// resource usage metrics of a cluster.
+type ClusterMetrics struct {
+	unversioned.TypeMeta `json:",inline"`
+	v1.ObjectMeta        `json:"metadata,omitempty"`
+
+	// The following fields define time interval from which metrics were
+	// collected from the interval [Timestamp-Window, Timestamp].
+	Timestamp unversioned.Time     `json:"timestamp"`
+	Window    unversioned.Duration `json:"window"`
+
+	// The memory usage is the memory working set.
+	Usage v1.ResourceList `json:"usage"`
+}
+
 // resource usage metrics of a node.
 type NodeMetrics struct {
 	unversioned.TypeMeta `json:",inline"`

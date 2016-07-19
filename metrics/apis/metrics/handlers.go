@@ -55,6 +55,11 @@ func (a *Api) Register(container *restful.Container) {
 		Doc("Root endpoint of metrics API").
 		Produces(restful.MIME_JSON)
 
+	ws.Route(ws.GET("/cluster/").
+		To(a.clusterMetrics).
+		Doc("Get a list of metrics for cluster.").
+		Operation("clusterMetrics"))
+
 	ws.Route(ws.GET("/nodes/").
 		To(a.nodeMetricsList).
 		Doc("Get a list of metrics for all available nodes.").
@@ -83,6 +88,42 @@ func (a *Api) Register(container *restful.Container) {
 	container.Add(ws)
 }
 
+func (a *Api) clusterMetrics(request *restful.Request, response *restful.Response) {
+	cm := a.getClusterMetrics()
+	if cm == nil {
+		response.WriteError(http.StatusNotFound, fmt.Errorf("No metrics for cluster"))
+		return
+	}
+	response.WriteEntity(cm)
+}
+
+func (a *Api) getClusterMetrics() *v1alpha1.ClusterMetrics {
+	batch := a.metricSink.GetLatestDataBatch()
+	if batch == nil {
+		return nil
+	}
+
+	ms, found := batch.MetricSets[core.ClusterKey()]
+	if !found {
+		return nil
+	}
+
+	usage, err := parseResourceList(ms)
+	if err != nil {
+		return nil
+	}
+
+	return &v1alpha1.ClusterMetrics{
+		ObjectMeta: kube_v1.ObjectMeta{
+			Name:              core.ClusterKey(),
+			CreationTimestamp: kube_unversioned.NewTime(time.Now()),
+		},
+		Timestamp: kube_unversioned.NewTime(batch.Timestamp),
+		Window:    kube_unversioned.Duration{Duration: time.Minute},
+		Usage:     usage,
+	}
+}
+
 func (a *Api) nodeMetricsList(request *restful.Request, response *restful.Response) {
 	res := []*v1alpha1.NodeMetrics{}
 	for _, node := range a.metricSink.GetNodes() {
@@ -97,7 +138,7 @@ func (a *Api) nodeMetrics(request *restful.Request, response *restful.Response) 
 	node := request.PathParameter("node-name")
 	m := a.getNodeMetrics(node)
 	if m == nil {
-		response.WriteError(http.StatusNotFound, fmt.Errorf("No metrics for ode %v", node))
+		response.WriteError(http.StatusNotFound, fmt.Errorf("No metrics for node %v", node))
 		return
 	}
 	response.WriteEntity(m)
